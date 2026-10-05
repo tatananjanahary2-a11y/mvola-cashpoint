@@ -19,15 +19,25 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" \
-                     "platforms;android-34" \
-                     "build-tools;34.0.0"
+          set -e
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          echo "SDKMANAGER=$SDKMANAGER"
+
+          "$SDKMANAGER" --version
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Build Release APK
         run: |
@@ -35,13 +45,20 @@ jobs:
 
       - name: Rename APK
         run: |
+          set -e
           mkdir -p release
+
           cp app/build/outputs/apk/release/app-release.apk \
              release/FAST_CASHPOINT_PRODUCTION.apk
 
       - name: Verify APK
         run: |
+          set -e
+
+          test -f release/FAST_CASHPOINT_PRODUCTION.apk
+
           ls -lh release/FAST_CASHPOINT_PRODUCTION.apk
+
           sha256sum release/FAST_CASHPOINT_PRODUCTION.apk
 
       - name: Upload Production APK
