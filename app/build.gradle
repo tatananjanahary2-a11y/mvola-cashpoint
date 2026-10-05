@@ -1,0 +1,22 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hermogenio.cashpoint'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.hermogenio.cashpoint'
+        minSdk 23
+        targetSdk 27
+        versionCode 1
+        versionName '1.0'
+    }
+}
+
+dependencies {
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    // Ed25519 verification compatible with Android API 27+
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+}

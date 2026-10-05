@@ -1,0 +1,718 @@
+package com.hermogenio.cashpoint;
+
+import android.app.Notification;
+import android.content.SharedPreferences;
+import android.util.Log;
+import android.service.notification.NotificationListenerService;
+import android.service.notification.StatusBarNotification;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class CashpointNotificationListener
+        extends NotificationListenerService {
+
+    @Override
+    public void onListenerConnected() {
+        super.onListenerConnected();
+
+        android.util.Log.d(
+                "CASHPOINT_SERVICE_STARTED",
+                "Notification Listener CONNECTED");
+    }
+
+    /*
+     * IMPORTANT :
+     * Tsy ovaina ny système SMS efa misy.
+     * Ampiasaina eto ilay stockage efa ampiasain'ny SmsReceiver.
+     */
+    private static final String SMS_PREFS =
+            "MVOLA_SMS_TRANSACTIONS";
+
+    private static final String SMS_KEY =
+            "transactions";
+
+    /*
+     * Tazonina ihany koa ity historique notification taloha ity
+     * mba tsy hamafana data efa mety tao anatiny.
+     */
+    private static final String OLD_PREFS =
+            "CASHPOINT_NOTIFICATION_HISTORY";
+
+    private static final String OLD_KEY =
+            "transactions";
+
+    @Override
+    public void onNotificationPosted(
+            StatusBarNotification sbn) {
+
+        if (sbn == null) {
+            return;
+        }
+
+        Notification notification =
+                sbn.getNotification();
+
+        if (notification == null ||
+                notification.extras == null) {
+            return;
+        }
+
+        String titre = "";
+
+        CharSequence title =
+                notification.extras.getCharSequence(
+                        Notification.EXTRA_TITLE);
+
+        if (title != null) {
+            titre = title.toString();
+        }
+
+        /*
+         * Android notification:
+         * EXTRA_TEXT
+         * EXTRA_BIG_TEXT
+         * EXTRA_TEXT_LINES
+         */
+        String message =
+                extraireMessage(notification);
+
+        if (message.trim().isEmpty()) {
+            return;
+        }
+
+        String source =
+                titre + " " + message;
+
+        String lower =
+                normaliser(source);
+
+        /*
+         * Tsy mandray notification rehetra.
+         */
+        if (!lower.contains("mvola") &&
+                !lower.contains("yas") &&
+                !lower.contains("envoye") &&
+                !lower.contains("recu") &&
+                !lower.contains("achat de credit") &&
+                !lower.contains("depot reussi")) {
+
+            return;
+        }
+
+        Transaction tx =
+                parser(message);
+
+        if (tx == null) {
+            return;
+        }
+
+        /*
+         * Mitahiry ao amin'ilay historique iombonana.
+         */
+        enregistrerDansHistoriqueSms(tx);
+
+        /*
+         * Tazonina ho compatible amin'ny historique notification taloha.
+         */
+        enregistrerDansAncienHistorique(tx);
+    }
+
+    private String extraireMessage(
+            Notification notification) {
+
+        try {
+
+            CharSequence text =
+                    notification.extras.getCharSequence(
+                            Notification.EXTRA_TEXT);
+
+            CharSequence bigText =
+                    notification.extras.getCharSequence(
+                            Notification.EXTRA_BIG_TEXT);
+
+            if (bigText != null &&
+                    !bigText.toString().trim().isEmpty()) {
+
+                return bigText.toString().trim();
+            }
+
+            if (text != null &&
+                    !text.toString().trim().isEmpty()) {
+
+                return text.toString().trim();
+            }
+
+            CharSequence[] lines =
+                    notification.extras.getCharSequenceArray(
+                            Notification.EXTRA_TEXT_LINES);
+
+            if (lines != null &&
+                    lines.length > 0) {
+
+                StringBuilder s =
+                        new StringBuilder();
+
+                for (CharSequence line : lines) {
+
+                    if (line == null) {
+                        continue;
+                    }
+
+                    if (s.length() > 0) {
+                        s.append(" ");
+                    }
+
+                    s.append(line);
+                }
+
+                return s.toString().trim();
+            }
+
+        } catch (Exception ignored) {
+        }
+
+        return "";
+    }
+
+    private String normaliser(String value) {
+
+        if (value == null) {
+            return "";
+        }
+
+        String s =
+                java.text.Normalizer.normalize(
+                        value,
+                        java.text.Normalizer.Form.NFD);
+
+        return s
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private Transaction parser(
+            String message) {
+
+        Transaction tx =
+                new Transaction();
+
+        tx.messageOriginal =
+                message;
+
+        String clean =
+                message
+                        .replace("\n", " ")
+                        .replace("\r", " ")
+                        .replaceAll("\\s+", " ")
+                        .trim();
+
+        /*
+         * --------------------------------------------------
+         * REFERENCE
+         * --------------------------------------------------
+         */
+        tx.reference =
+                match(
+                        clean,
+                        "(?i)Ref\\s*:\\s*([0-9]+)");
+
+        /*
+         * --------------------------------------------------
+         * FRAIS
+         * --------------------------------------------------
+         */
+        tx.frais =
+                normalizeNumber(
+                        match(
+                                clean,
+                                "(?i)Frais\\s*:\\s*([0-9][0-9\\s.]*)\\s*Ar"));
+
+        /*
+         * --------------------------------------------------
+         * BONUS
+         * --------------------------------------------------
+         */
+        tx.bonus =
+                normalizeNumber(
+                        match(
+                                clean,
+                                "(?i)Bonus\\s*:\\s*([0-9][0-9\\s.]*)\\s*Ar?"));
+
+        /*
+         * --------------------------------------------------
+         * SOLDE
+         * --------------------------------------------------
+         */
+        tx.solde =
+                normalizeNumber(
+                        match(
+                                clean,
+                                "(?i)Solde(?:\\s+MVola)?\\s*:\\s*([0-9][0-9\\s.]*)\\s*Ar"));
+
+        /*
+         * --------------------------------------------------
+         * TRANSFERT ENVOYÉ
+         *
+         * Exemple:
+         * 10 275 Ar envoye a Berthine 0388228567
+         * le 01/10/26 a 07:48.
+         * --------------------------------------------------
+         */
+        Pattern envoyePattern =
+                Pattern.compile(
+                        "(?i)^\\s*([0-9][0-9\\s.]*)\\s*Ar\\s+" +
+                        "envoy[eé]\\s+a\\s+(.+?)\\s+" +
+                        "(0[0-9]{9})\\s+le\\s+" +
+                        "([0-9/]+)\\s+a\\s+([0-9:]+)");
+
+        Matcher envoye =
+                envoyePattern.matcher(clean);
+
+        if (envoye.find()) {
+
+            tx.type =
+                    "TRANSFERT ENVOYÉ";
+
+            tx.montant =
+                    normalizeNumber(envoye.group(1));
+
+            tx.nom =
+                    envoye.group(2).trim();
+
+            tx.numero =
+                    envoye.group(3);
+
+            tx.date =
+                    envoye.group(4);
+
+            tx.heure =
+                    envoye.group(5);
+
+            tx.raison =
+                    match(
+                            clean,
+                            "(?i)Raison\\s*:\\s*([^\\.]+)");
+
+            return tx;
+        }
+
+        /*
+         * --------------------------------------------------
+         * ACHAT CRÉDIT YAS
+         *
+         * Exemple:
+         * Achat de credit YAS reussi:
+         * 1 000 Ar pour 0342746101.
+         * --------------------------------------------------
+         */
+        Pattern creditPattern =
+                Pattern.compile(
+                        "(?i)Achat\\s+de\\s+credit\\s+YAS\\s+" +
+                        "reussi\\s*:\\s*" +
+                        "([0-9][0-9\\s.]*)\\s*Ar\\s+" +
+                        "pour\\s+(0[0-9]{9})");
+
+        Matcher credit =
+                creditPattern.matcher(clean);
+
+        if (credit.find()) {
+
+            tx.type =
+                    "ACHAT CRÉDIT";
+
+            tx.montant =
+                    normalizeNumber(credit.group(1));
+
+            tx.numero =
+                    credit.group(2);
+
+            return tx;
+        }
+
+        /*
+         * --------------------------------------------------
+         * TRANSFERT REÇU
+         *
+         * Exemple:
+         * 50 000 Ar recu de Richard 0347071955
+         * le 01/10/26 a 11:51.
+         * --------------------------------------------------
+         */
+        Pattern recuPattern =
+                Pattern.compile(
+                        "(?i)^\\s*([0-9][0-9\\s.]*)\\s*Ar\\s+" +
+                        "re[cç]u\\s+de\\s+(.+?)\\s+" +
+                        "(0[0-9]{9})\\s+le\\s+" +
+                        "([0-9/]+)\\s+a\\s+([0-9:]+)");
+
+        Matcher recu =
+                recuPattern.matcher(clean);
+
+        if (recu.find()) {
+
+            tx.type =
+                    "TRANSFERT REÇU";
+
+            tx.montant =
+                    normalizeNumber(recu.group(1));
+
+            tx.nom =
+                    recu.group(2).trim();
+
+            tx.numero =
+                    recu.group(3);
+
+            tx.date =
+                    recu.group(4);
+
+            tx.heure =
+                    recu.group(5);
+
+            return tx;
+        }
+
+        /*
+         * --------------------------------------------------
+         * DÉPÔT
+         * --------------------------------------------------
+         */
+        Pattern depotPattern =
+                Pattern.compile(
+                        "(?i)depot\\s+reussi\\s*:\\s*" +
+                        "([0-9][0-9\\s.]*)\\s*Ar\\s+" +
+                        "a[uù]pres\\s+de\\s+(.+?)\\s*" +
+                        "\\((0[0-9]{9})\\)");
+
+        Matcher depot =
+                depotPattern.matcher(clean);
+
+        if (depot.find()) {
+
+            tx.type =
+                    "DÉPÔT";
+
+            tx.montant =
+                    normalizeNumber(depot.group(1));
+
+            tx.nom =
+                    depot.group(2).trim();
+
+            tx.numero =
+                    depot.group(3);
+
+            return tx;
+        }
+
+        return null;
+    }
+
+    private String match(
+            String text,
+            String regex) {
+
+        try {
+
+            Matcher matcher =
+                    Pattern.compile(regex)
+                            .matcher(text);
+
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+
+        } catch (Exception ignored) {
+        }
+
+        return "";
+    }
+
+    private String normalizeNumber(
+            String value) {
+
+        if (value == null ||
+                value.trim().isEmpty()) {
+
+            return "";
+        }
+
+        return value
+                .replace(" ", "")
+                .replace(".", "")
+                .trim();
+    }
+
+    /*
+     * ======================================================
+     * HISTORIQUE SMS EXISTANT
+     * ======================================================
+     */
+    private void enregistrerDansHistoriqueSms(
+            Transaction tx) {
+
+        try {
+
+            SharedPreferences prefs =
+                    getSharedPreferences(
+                            SMS_PREFS,
+                            MODE_PRIVATE);
+
+            String old =
+                    prefs.getString(
+                            SMS_KEY,
+                            "[]");
+
+            JSONArray array =
+                    new JSONArray(old);
+
+            /*
+             * REF = anti-doublon principal.
+             */
+            if (!tx.reference.isEmpty()) {
+
+                for (int i = 0;
+                     i < array.length();
+                     i++) {
+
+                    JSONObject oldObj =
+                            array.optJSONObject(i);
+
+                    if (oldObj == null) {
+                        continue;
+                    }
+
+                    if (tx.reference.equals(
+                            oldObj.optString(
+                                    "reference",
+                                    ""))) {
+
+                        return;
+                    }
+                }
+            }
+
+            JSONObject obj =
+                    new JSONObject();
+
+            obj.put(
+                    "type",
+                    tx.type);
+
+            obj.put(
+                    "nom",
+                    tx.nom);
+
+            obj.put(
+                    "numero",
+                    tx.numero);
+
+            obj.put(
+                    "montant",
+                    parseLong(tx.montant));
+
+            obj.put(
+                    "frais",
+                    parseLong(tx.frais));
+
+            obj.put(
+                    "bonus",
+                    parseLong(tx.bonus));
+
+            obj.put(
+                    "solde",
+                    parseLong(tx.solde));
+
+            obj.put(
+                    "reference",
+                    tx.reference);
+
+            obj.put(
+                    "date",
+                    tx.date);
+
+            obj.put(
+                    "heure",
+                    tx.heure);
+
+            obj.put(
+                    "raison",
+                    tx.raison);
+
+            obj.put(
+                    "message_original",
+                    tx.messageOriginal);
+
+            obj.put(
+                    "dateReception",
+                    new SimpleDateFormat(
+                            "dd/MM/yyyy HH:mm:ss",
+                            Locale.getDefault())
+                            .format(new Date()));
+
+            /*
+             * Nouvelle transaction en première position,
+             * comme le système SmsReceiver.
+             */
+            JSONArray updated =
+                    new JSONArray();
+
+            updated.put(obj);
+
+            for (int i = 0;
+                 i < array.length() &&
+                 updated.length() < 100;
+                 i++) {
+
+                JSONObject item =
+                        array.optJSONObject(i);
+
+                if (item != null) {
+                    updated.put(item);
+                }
+            }
+
+            prefs.edit()
+                    .putString(
+                            SMS_KEY,
+                            updated.toString())
+                    .apply();
+
+        } catch (Exception ignored) {
+        }
+    }
+
+    /*
+     * ======================================================
+     * ANCIEN HISTORIQUE NOTIFICATION
+     * ======================================================
+     *
+     * On le conserve afin de ne pas supprimer les anciennes
+     * données éventuellement déjà enregistrées.
+     */
+    private void enregistrerDansAncienHistorique(
+            Transaction tx) {
+
+        try {
+
+            SharedPreferences prefs =
+                    getSharedPreferences(
+                            OLD_PREFS,
+                            MODE_PRIVATE);
+
+            String old =
+                    prefs.getString(
+                            OLD_KEY,
+                            "[]");
+
+            JSONArray array =
+                    new JSONArray(old);
+
+            if (!tx.reference.isEmpty()) {
+
+                for (int i = 0;
+                     i < array.length();
+                     i++) {
+
+                    JSONObject oldObj =
+                            array.optJSONObject(i);
+
+                    if (oldObj == null) {
+                        continue;
+                    }
+
+                    if (tx.reference.equals(
+                            oldObj.optString(
+                                    "reference",
+                                    ""))) {
+
+                        return;
+                    }
+                }
+            }
+
+            JSONObject obj =
+                    new JSONObject();
+
+            obj.put("type", tx.type);
+            obj.put("nom", tx.nom);
+            obj.put("numero", tx.numero);
+            obj.put("montant", tx.montant);
+            obj.put("frais", tx.frais);
+            obj.put("bonus", tx.bonus);
+            obj.put("solde", tx.solde);
+            obj.put("reference", tx.reference);
+            obj.put("date", tx.date);
+            obj.put("heure", tx.heure);
+            obj.put("raison", tx.raison);
+            obj.put(
+                    "message_original",
+                    tx.messageOriginal);
+
+            obj.put(
+                    "date_reception",
+                    new SimpleDateFormat(
+                            "dd/MM/yyyy HH:mm:ss",
+                            Locale.getDefault())
+                            .format(new Date()));
+
+            array.put(obj);
+
+            prefs.edit()
+                    .putString(
+                            OLD_KEY,
+                            array.toString())
+                    .apply();
+
+        } catch (Exception ignored) {
+        }
+    }
+
+    private long parseLong(
+            String value) {
+
+        if (value == null ||
+                value.trim().isEmpty()) {
+
+            return 0;
+        }
+
+        try {
+
+            String digits =
+                    value.replaceAll(
+                            "[^0-9]",
+                            "");
+
+            if (digits.isEmpty()) {
+                return 0;
+            }
+
+            return Long.parseLong(digits);
+
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private static class Transaction {
+
+        String type = "";
+        String nom = "";
+        String numero = "";
+        String montant = "";
+        String frais = "";
+        String bonus = "";
+        String solde = "";
+        String reference = "";
+        String date = "";
+        String heure = "";
+        String raison = "";
+        String messageOriginal = "";
+    }
+}

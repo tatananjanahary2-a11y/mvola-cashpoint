@@ -1,0 +1,3 @@
+405134971fba6bc63ee067955e881397a884253eae1a337343ade1799b2bc1fb  app/src/main/java/com/hermogenio/cashpoint/MainActivity.java
+f73abd56d138f7c59a83d905a5db4afd81c66260fc3ee8ddcd469a7b15344061  app/src/main/AndroidManifest.xml
+88c8e52596b3ef22d1b889217a9d0e7607d26dd9ffbed5971263432bd5d70a46  app/build.gradle

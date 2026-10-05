@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>M'VOLA - CASHPOINT</title>
+
+<style>
+
+body {
+    margin: 0;
+    padding: 15px;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+}
+
+.container {
+    max-width: 500px;
+    margin: auto;
+}
+
+.header {
+    background: #ffd900;
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+}
+
+.header h1 {
+    margin: 0;
+}
+
+.card {
+    background: white;
+    padding: 18px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 7px;
+    font-weight: bold;
+}
+
+input,
+select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 13px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.contact-result {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+}
+
+.contact-result:hover {
+    background: #f0f0f0;
+}
+
+.contact-name {
+    font-weight: bold;
+}
+
+.contact-phone {
+    color: #555;
+    margin-top: 4px;
+}
+
+.code-box {
+    background: #eeeeee;
+    padding: 15px;
+    border-radius: 10px;
+    word-break: break-all;
+}
+
+#codeUssd {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 9px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.appel {
+    background: #25a244;
+    color: white;
+}
+
+.valider {
+    background: #1565c0;
+    color: white;
+}
+
+.retour {
+    background: #555;
+    color: white;
+}
+
+.message {
+    font-weight: bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+
+<h1>🟡 M'VOLA</h1>
+
+<p>CASHPOINT</p>
+
+</div>
+
+<div class="card">
+
+<h2>👤 Recherche contact</h2>
+
+<input
+type="search"
+id="rechercheContact"
+placeholder="🔎 Nom ou numéro..."
+oninput="rechercherContact()"
+>
+
+<div id="resultatsContacts"></div>
+
+</div>
+
+<div class="card">
+
+<h2>📱 Opération M'VOLA</h2>
+
+<label>Nom:</label>
+
+<input
+type="text"
+id="nom"
+placeholder="Nom du client"
+>
+
+<label>Numéro téléphone:</label>
+
+<input
+type="tel"
+id="telephone"
+placeholder="0345678987"
+oninput="genererUSSD()"
+>
+
+<label>Montant:</label>
+
+<input
+type="number"
+id="montant"
+placeholder="25000"
+oninput="genererUSSD()"
+>
+
+<label>Opération:</label>
+
+<select
+id="operation"
+onchange="genererUSSD()"
+>
+
+<option value="">
+-- Choisir une opération --
+</option>
+
+<option value="transfert">
+💸 Transfert / Mandefa vola
+</option>
+
+<option value="depot">
+📥 Dépôt
+</option>
+
+<option value="credit">
+📱 Mivarotra Crédit
+</option>
+
+<option value="offre">
+🎁 Mivarotra Offre
+</option>
+
+<option value="solde">
+💰 Mijery Solde
+</option>
+
+<option value="cashpoint">
+🏪 Transfert vers Cash Point
+</option>
+
+</select>
+
+</div>
+
+<div class="card">
+
+<h2>📱 Code USSD</h2>
+
+<div class="code-box">
+
+<p id="codeUssd">
+Aucun code USSD
+</p>
+
+</div>
+
+<button
+id="appelUssd"
+class="appel"
+onclick="appelerUSSD()"
+style="display:none;"
+>
+📞 Appeler USSD
+</button>
+
+<p
+id="message"
+class="message"
+></p>
+
+</div>
+
+<div class="card">
+
+<button
+class="valider"
+onclick="validerOperation()"
+>
+✅ Valider
+</button>
+
+<button
+class="retour"
+onclick="retourDashboard()"
+>
+⬅️ Retour Dashboard
+</button>
+
+</div>
+
+</div>
+
+<script>
+
+const contacts = [
+
+{
+nom: "Véronique",
+telephone: "0345678987"
+},
+
+{
+nom: "Jean",
+telephone: "0321234567"
+},
+
+{
+nom: "Marie",
+telephone: "0339876543"
+},
+
+{
+nom: "Paul",
+telephone: "0341122334"
+},
+
+{
+nom: "Rakoto",
+telephone: "0324455667"
+}
+
+];
+
+let codeUSSD = "";
+
+function rechercherContact() {
+
+let recherche =
+document
+.getElementById("rechercheContact")
+.value
+.toLowerCase()
+.trim();
+
+let resultats =
+document.getElementById("resultatsContacts");
+
+resultats.innerHTML = "";
+
+if (recherche === "") {
+return;
+}
+
+let contactsFiltres =
+contacts.filter(function(contact) {
+
+return (
+contact.nom
+.toLowerCase()
+.includes(recherche)
+||
+contact.telephone
+.includes(recherche)
+);
+
+});
+
+if (contactsFiltres.length === 0) {
+
+resultats.innerHTML =
+"<p>Aucun contact trouvé.</p>";
+
+return;
+
+}
+
+contactsFiltres.forEach(function(contact) {
+
+let div =
+document.createElement("div");
+
+div.className =
+"contact-result";
+
+div.innerHTML =
+"<div class='contact-name'>" +
+contact.nom +
+"</div>" +
+
+"<div class='contact-phone'>" +
+contact.telephone +
+"</div>";
+
+div.onclick = function() {
+selectionnerContact(contact);
+};
+
+resultats.appendChild(div);
+
+});
+
+}
+
+function selectionnerContact(contact) {
+
+document.getElementById("nom").value =
+contact.nom;
+
+document.getElementById("telephone").value =
+contact.telephone;
+
+document.getElementById("rechercheContact").value =
+contact.nom;
+
+document.getElementById("resultatsContacts").innerHTML =
+"";
+
+genererUSSD();
+
+}
+
+function genererUSSD() {
+
+let telephone =
+document
+.getElementById("telephone")
+.value
+.trim();
+
+let montant =
+document
+.getElementById("montant")
+.value
+.trim();
+
+let operation =
+document
+.getElementById("operation")
+.value;
+
+codeUSSD = "";
+
+document.getElementById("message").innerHTML = "";
+
+if (
+operation === "transfert" &&
+telephone !== "" &&
+montant !== ""
+) {
+
+codeUSSD =
+"#111*1*2*" +
+telephone +
+"*1*" +
+montant +
+"#";
+
+}
+
+else if (
+operation === "credit" &&
+telephone !== "" &&
+montant !== ""
+) {
+
+codeUSSD =
+"#111*1*4*2*1*" +
+telephone +
+"*" +
+montant +
+"#";
+
+}
+
+else if (
+operation === "offre" &&
+telephone !== ""
+) {
+
+codeUSSD =
+"#111*1*4*5*" +
+telephone +
+"#";
+
+}
+
+else if (
+operation === "solde"
+) {
+
+codeUSSD =
+"#111*1*7*1#";
+
+}
+
+else if (
+operation === "cashpoint"
+) {
+
+codeUSSD =
+"#111*1*9#";
+
+}
+
+else if (
+operation === "depot"
+) {
+
+document.getElementById("codeUssd").innerHTML =
+"⚠️ Code Dépôt non configuré";
+
+document.getElementById("appelUssd").style.display =
+"none";
+
+return;
+
+}
+
+if (codeUSSD !== "") {
+
+document.getElementById("codeUssd").innerHTML =
+codeUSSD;
+
+document.getElementById("appelUssd").style.display =
+"block";
+
+}
+
+else {
+
+document.getElementById("codeUssd").innerHTML =
+"Aucun code USSD";
+
+document.getElementById("appelUssd").style.display =
+"none";
+
+}
+
+}
+
+function appelerUSSD() {
+
+if (codeUSSD === "") {
+return;
+}
+
+let numeroUSSD =
+encodeURIComponent(codeUSSD);
+
+window.location.href =
+"tel:" + numeroUSSD;
+
+}
+
+function validerOperation() {
+
+let nom =
+document.getElementById("nom").value.trim();
+
+let telephone =
+document.getElementById("telephone").value.trim();
+
+let montant =
+document.getElementById("montant").value.trim();
+
+let operation =
+document.getElementById("operation").value;
+
+if (nom === "") {
+
+alert("Veuillez entrer le nom.");
+return;
+
+}
+
+if (telephone === "") {
+
+alert("Veuillez entrer le numéro.");
+return;
+
+}
+
+if (operation === "") {
+
+alert("Veuillez choisir une opération.");
+return;
+
+}
+
+alert(
+"Opération enregistrée !\n\n" +
+"Nom : " +
+nom +
+"\nTéléphone : " +
+telephone +
+"\nMontant : " +
+montant +
+"\nOpération : " +
+operation
+);
+
+}
+
+function retourDashboard() {
+
+if (window.history.length > 1) {
+window.history.back();
+} else {
+alert("Dashboard non configuré dans cette version.");
+}
+
+}
+
+</script>
+
+
+<script>
+function fauxMessage() {
+    const nom = document.getElementById("nom")?.value || "Rakoto";
+    const telephone = document.getElementById("telephone")?.value || "0324455667";
+    const montant = document.getElementById("montant")?.value || "5000";
+    const operation = document.getElementById("operation")?.value || "transfert";
+
+    const message =
+        "🧪 MODE TEST\n\n" +
+        "✅ FAUX MESSAGE — AUCUNE OPÉRATION RÉELLE\n\n" +
+        "Opération : " + operation + "\n" +
+        "Nom : " + nom + "\n" +
+        "Téléphone : " + telephone + "\n" +
+        "Montant : " + montant + " Ar\n\n" +
+        "Statut : TEST RÉUSSI\n" +
+        "Aucun crédit, transfert ou débit réel n'a été effectué.";
+
+    alert(message);
+}
+</script>
+
+</body>
+
+</html>

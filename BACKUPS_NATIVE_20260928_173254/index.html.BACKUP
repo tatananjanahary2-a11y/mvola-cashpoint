@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M'VOLA — CASH POINT</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#f5f7fa;
+color:#172033
+}
+
+header{
+position:sticky;
+top:0;
+z-index:20;
+background:#1565c0;
+color:white;
+padding:14px 12px;
+box-shadow:0 2px 8px #0002
+}
+
+header h1{
+margin:0 0 10px;
+font-size:22px
+}
+
+nav{
+display:flex;
+gap:6px;
+overflow-x:auto
+}
+
+nav button{
+border:0;
+border-radius:8px;
+padding:9px 11px;
+background:#fff;
+color:#1565c0;
+font-weight:bold;
+white-space:nowrap
+}
+
+main{
+max-width:900px;
+margin:auto;
+padding:14px
+}
+
+.page{
+display:none
+}
+
+.page.active{
+display:block
+}
+
+.card{
+background:white;
+border-radius:12px;
+padding:15px;
+margin-bottom:14px;
+box-shadow:0 2px 8px #0001
+}
+
+h2,h3{
+margin-top:0
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(2,minmax(0,1fr));
+gap:10px
+}
+
+@media(max-width:600px){
+.grid{
+grid-template-columns:1fr
+}
+}
+
+label{
+display:block;
+font-weight:bold;
+margin-bottom:5px
+}
+
+input,select,button{
+font:inherit
+}
+
+input,select{
+width:100%;
+padding:11px;
+border:1px solid #ccd4df;
+border-radius:8px;
+background:white
+}
+
+.action{
+width:100%;
+border:0;
+border-radius:9px;
+padding:12px;
+margin-top:8px;
+background:#1565c0;
+color:white;
+font-weight:bold
+}
+
+.action.secondary{
+background:#455a64
+}
+
+.action.success{
+background:#2e7d32
+}
+
+.action.warning{
+background:#ef6c00
+}
+
+.action.danger{
+background:#c62828
+}
+
+.result{
+background:#eef5ff;
+border-left:4px solid #1565c0;
+padding:12px;
+border-radius:7px;
+margin-top:12px
+}
+
+.total{
+font-size:20px;
+font-weight:bold
+}
+
+.ok{
+color:#2e7d32;
+font-weight:bold
+}
+
+.bad{
+color:#c62828;
+font-weight:bold
+}
+
+.warn{
+background:#fff3cd;
+border-left:4px solid #f0ad00;
+padding:12px;
+border-radius:7px
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:white
+}
+
+th,td{
+border:1px solid #d7dde5;
+padding:8px;
+text-align:left
+}
+
+th{
+background:#eaf2fb
+}
+
+.table-wrap{
+overflow:auto
+}
+
+.hidden{
+display:none
+}
+
+.small{
+font-size:13px;
+color:#5b6575
+}
+
+.denom-row{
+display:grid;
+grid-template-columns:1fr 100px 1fr;
+gap:8px;
+align-items:center;
+margin-bottom:7px
+}
+
+@media(max-width:500px){
+.denom-row{
+grid-template-columns:1fr 75px 1fr
+}
+}
+
+.denom-total{
+font-weight:bold;
+text-align:right
+}
+
+.offer{
+border:1px solid #d7dde5;
+border-radius:9px;
+padding:10px;
+margin:7px 0
+}
+
+.offer button{
+margin-top:7px
+}
+
+pre.ussd{
+white-space:pre-wrap;
+background:#172033;
+color:#fff;
+border-radius:8px;
+padding:12px;
+overflow:auto
+}
+</style>
+</head>
+
+<body>
+
+<header>
+
+<h1>💙 M'VOLA — CASH POINT</h1>
+
+<nav>
+<button onclick="ouvrirPage('accueil')">Accueil</button>
+<button onclick="ouvrirPage('travail')">Travail</button>
+<button onclick="ouvrirPage('operations')">Opérations</button>
+<button onclick="ouvrirPage('ussd')">USSD</button>
+<button onclick="ouvrirPage('frais')">Frais</button>
+<button onclick="ouvrirPage('contacts')">Contacts</button>
+</nav>
+
+</header>
+
+<main>
+
+<section id="accueil" class="page active">
+
+<div class="card">
+
+<h2>Accueil</h2>
+
+<p>Gestion rapide de votre activité Cash Point.</p>
+
+<button class="action"
+onclick="ouvrirPage('travail')">
+Début / Fin de travail
+</button>
+
+<button class="action"
+onclick="ouvrirPage('operations')">
+Transfert / Crédit / Forfait
+</button>
+
+<button class="action"
+onclick="ouvrirPage('ussd')">
+Codes USSD
+</button>
+
+<button class="action"
+onclick="ouvrirPage('frais')">
+Frais de service
+</button>
+
+<button class="action"
+onclick="ouvrirPage('contacts')">
+Contacts
+</button>
+
+</div>
+
+</section>
+
+
+<section id="travail" class="page">
+
+<div class="card">
+
+<h2>Début de travail</h2>
+
+<div class="grid">
+
+<div>
+<label>Argent compte / téléphone (Ar)</label>
+<input
+id="debutCompte"
+type="number"
+min="0">
+</div>
+
+<div>
+<label>Argent physique (Ar)</label>
+<input
+id="debutCash"
+type="number"
+min="0">
+</div>
+
+</div>
+
+<button
+class="action success"
+onclick="debutTravail()">
+Enregistrer le début
+</button>
+
+<div
+id="resumeDebut"
+class="result">
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2>Fin de travail</h2>
+
+<div class="grid">
+
+<div>
+<label>Argent compte / téléphone (Ar)</label>
+<input
+id="finCompte"
+type="number"
+min="0">
+</div>
+
+<div>
+<label>Argent physique (Ar)</label>
+<input
+id="finCash"
+type="number"
+min="0">
+</div>
+
+</div>
+
+<button
+class="action warning"
+onclick="finTravail()">
+Enregistrer la fin
+</button>
+
+<div
+id="resumeFin"
+class="result">
+</div>
+
+</div>
+
+</section>
+
+
+<section id="operations" class="page">
+
+<div class="card">
+
+<h2>Opérations</h2>
+
+<label>Choisir l'opération</label>
+
+<select
+id="operationSelect"
+onchange="onOperationChange()">
+
+<option value="transfert">
+Transfert
+</option>
+
+<option value="credit">
+Achat Crédit
+</option>
+
+<option value="forfait">
+Achat Forfait
+</option>
+
+</select>
+
+</div>
+
+
+<div id="transfertBox" class="card">
+
+<h2>💸 Transfert</h2>
+
+<div class="grid">
+
+<div>
+
+<label>Opérateur</label>
+
+<select id="transfertOperateur">
+
+<option value="mvola">
+MVola
+</option>
+
+<option value="orange">
+Orange Money
+</option>
+
+<option value="airtel">
+Airtel Money
+</option>
+
+</select>
+
+</div>
+
+
+<div>
+
+<label>
+Numéro du bénéficiaire
+</label>
+
+<input
+id="transfertNumero"
+type="tel"
+placeholder="03xxxxxxxx">
+
+</div>
+
+</div>
+
+
+<label style="margin-top:10px">
+Montant à envoyer (Ar)
+</label>
+
+<input
+id="transfertMontant"
+type="number"
+min="0"
+placeholder="Exemple : 20000"
+oninput="calculerTransfert()">
+
+
+<div
+id="transfertCalcul"
+class="result">
+
+Entrez le montant à envoyer pour calculer automatiquement les frais.
+
+</div>
+
+
+<button
+class="action"
+onclick="preparerTransfert()">
+
+Afficher le code USSD
+
+</button>
+
+
+<div
+id="transfertUssd"
+class="result hidden">
+
+</div>
+
+
+<div
+class="card"
+style="margin-top:14px;padding:12px;background:#f8fafc">
+
+<h3>
+💵 Fanisana vola azon'ny client
+</h3>
+
+<p class="small">
+
+Ampidiro ny isan'ny billets/pièces.
+Ny app dia manisa Ar sy FMG ary mampitaha
+amin'ny total tokony haloan'ny client.
+
+</p>
+
+<div id="denominations">
+</div>
+
+<div class="result">
+
+<div>
+Total fanisana:
+<span
+id="cashCountAr"
+class="total">
+0 Ar
+</span>
+</div>
+
+<div>
+Total FMG:
+<span
+id="cashCountFmg"
+class="total">
+0 FMG
+</span>
+</div>
+
+<div id="cashDifference">
+Ampidiro ny fanisana.
+</div>
+
+</div>
+
+<button
+class="action success"
+onclick="verifierFanisana()">
+
+Vérifier la somme
+
+</button>
+
+</div>
+
+</div>
+
+
+<div
+id="creditBox"
+class="card hidden">
+
+<h2>📱 Achat Crédit</h2>
+
+<div class="grid">
+
+<div>
+
+<label>Opérateur</label>
+
+<select id="creditOperateur">
+
+<option value="mvola">
+MVola
+</option>
+
+<option value="orange">
+Orange Money
+</option>
+
+<option value="airtel">
+Airtel Money
+</option>
+
+</select>
+
+</div>
+
+<div>
+
+<label>Numéro</label>
+
+<input
+id="creditNumero"
+type="tel">
+
+</div>
+
+</div>
+
+<label style="margin-top:10px">
+Montant (Ar)
+</label>
+
+<input
+id="creditMontant"
+type="number"
+min="0">
+
+<button
+class="action"
+onclick="preparerCredit()">
+
+Afficher le code USSD
+
+</button>
+
+<div
+id="creditUssd"
+class="result hidden">
+</div>
+
+</div>
+
+
+<div
+id="forfaitBox"
+class="card hidden">
+
+<h2>📶 Achat Forfait</h2>
+
+<div class="grid">
+
+<div>
+
+<label>Opérateur</label>
+
+<select
+id="forfaitOperateur"
+onchange="afficherOffres()">
+
+<option value="mvola">
+MVola
+</option>
+
+<option value="orange">
+Orange Money
+</option>
+
+<option value="airtel">
+Airtel Money
+</option>
+
+</select>
+
+</div>
+
+<div>
+
+<label>Numéro</label>
+
+<input
+id="forfaitNumero"
+type="tel">
+
+</div>
+
+</div>
+
+<div
+id="offresBox"
+class="result">
+</div>
+
+</div>
+
+</section>

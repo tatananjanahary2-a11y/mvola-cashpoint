@@ -1,0 +1,21 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hermogenio.cashpoint'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.hermogenio.cashpoint'
+        minSdk 27
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+}
+
+dependencies {
+    // Ed25519 verification compatible with Android API 27+
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+}
