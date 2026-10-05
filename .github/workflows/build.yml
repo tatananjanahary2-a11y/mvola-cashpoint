@@ -48,8 +48,15 @@ jobs:
           set -e
           mkdir -p release
 
-          cp app/build/outputs/apk/release/app-release.apk \
-             release/FAST_CASHPOINT_PRODUCTION.apk
+          APK=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK found in app/build/outputs/apk/release/"
+            exit 1
+          fi
+
+          echo "APK found: $APK"
+          cp "$APK" release/FAST_CASHPOINT_PRODUCTION.apk
 
       - name: Verify APK
         run: |
