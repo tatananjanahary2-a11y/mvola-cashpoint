@@ -22,19 +22,16 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 34
+      - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" \
                      "platforms;android-34" \
                      "build-tools;34.0.0"
 
-      - name: Make Gradle executable
-        run: chmod +x gradlew
-
       - name: Build Release APK
         run: |
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          gradle --no-daemon --stacktrace :app:assembleRelease
 
       - name: Rename APK
         run: |
