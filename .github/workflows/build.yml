@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build Signed Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -29,8 +29,6 @@ jobs:
             SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           fi
 
-          echo "SDKMANAGER=$SDKMANAGER"
-
           "$SDKMANAGER" --version
 
           yes | "$SDKMANAGER" --licenses >/dev/null || true
@@ -39,38 +37,102 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-      - name: Build Release APK
-        run: |
-          gradle --no-daemon --stacktrace :app:assembleRelease
-
-      - name: Rename APK
+      - name: Restore release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.FAST_CASHPOINT_KEYSTORE_B64 }}
         run: |
           set -e
-          mkdir -p release
 
-          APK=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          mkdir -p "$RUNNER_TEMP/fastcashpoint"
+
+          printf '%s' "$KEYSTORE_B64" \
+            | base64 --decode \
+            > "$RUNNER_TEMP/fastcashpoint/fast-cashpoint-release.jks"
+
+          chmod 600 "$RUNNER_TEMP/fastcashpoint/fast-cashpoint-release.jks"
+
+          test -s "$RUNNER_TEMP/fastcashpoint/fast-cashpoint-release.jks"
+
+          echo "Release keystore restored successfully."
+
+      - name: Build Release APK
+        run: |
+          set -e
+
+          gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Sign APK
+        env:
+          STORE_PASSWORD: ${{ secrets.FAST_CASHPOINT_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.FAST_CASHPOINT_KEY_PASSWORD }}
+        run: |
+          set -e
+
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          KEYSTORE="$RUNNER_TEMP/fastcashpoint/fast-cashpoint-release.jks"
+
+          APK=$(find app/build/outputs/apk/release \
+            -maxdepth 1 \
+            -type f \
+            -name '*.apk' \
+            | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: No APK found in app/build/outputs/apk/release/"
+            echo "ERROR: Release APK not found."
             exit 1
           fi
 
-          echo "APK found: $APK"
-          cp "$APK" release/FAST_CASHPOINT_PRODUCTION.apk
+          echo "Unsigned/Unaligned APK: $APK"
 
-      - name: Verify APK
+          "$BUILD_TOOLS/zipalign" \
+            -f \
+            -p \
+            4 \
+            "$APK" \
+            "$RUNNER_TEMP/fastcashpoint/aligned.apk"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias fastcashpoint \
+            --ks-pass "pass:$STORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --out "$RUNNER_TEMP/fastcashpoint/signed.apk" \
+            "$RUNNER_TEMP/fastcashpoint/aligned.apk"
+
+          "$BUILD_TOOLS/apksigner" verify \
+            --verbose \
+            "$RUNNER_TEMP/fastcashpoint/signed.apk"
+
+          mkdir -p release
+
+          cp \
+            "$RUNNER_TEMP/fastcashpoint/signed.apk" \
+            "release/FAST_CASHPOINT_PRODUCTION.apk"
+
+      - name: Verify final APK
         run: |
           set -e
 
-          test -f release/FAST_CASHPOINT_PRODUCTION.apk
+          APK="release/FAST_CASHPOINT_PRODUCTION.apk"
 
-          ls -lh release/FAST_CASHPOINT_PRODUCTION.apk
+          test -f "$APK"
 
-          sha256sum release/FAST_CASHPOINT_PRODUCTION.apk
+          echo "=== APK ==="
+          ls -lh "$APK"
+
+          echo
+          echo "=== APK SIGNATURE ==="
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify \
+            --verbose \
+            "$APK"
+
+          echo
+          echo "=== SHA256 ==="
+          sha256sum "$APK"
 
       - name: Upload Production APK
         uses: actions/upload-artifact@v4
         with:
-          name: FAST_CASHPOINT_PRODUCTION
+          name: FAST_CASHPOINT_PRODUCTION_SIGNED
           path: release/FAST_CASHPOINT_PRODUCTION.apk
           if-no-files-found: error
